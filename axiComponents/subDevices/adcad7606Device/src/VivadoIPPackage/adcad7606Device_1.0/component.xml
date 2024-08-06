@@ -1640,7 +1640,7 @@
       <xilinx:taxonomies>
         <xilinx:taxonomy>/fLink/SubDevices</xilinx:taxonomy>
       </xilinx:taxonomies>
-      <xilinx:displayName>adcad7606Device</xilinx:displayName>
+      <xilinx:displayName>ADC AD7606 Device</xilinx:displayName>
       <xilinx:vendorDisplayName>www.ost.ch</xilinx:vendorDisplayName>
       <xilinx:vendorURL>https://flink-project.ch</xilinx:vendorURL>
       <xilinx:coreRevision>1</xilinx:coreRevision>
