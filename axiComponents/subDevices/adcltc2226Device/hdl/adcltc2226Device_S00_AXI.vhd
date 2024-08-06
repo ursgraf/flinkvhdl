@@ -1,6 +1,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+USE IEEE.math_real.ALL;
 use work.flink_definitions.all;
 
 entity adcltc2226Device_S00_AXI is
@@ -181,6 +182,20 @@ architecture arch_imp of adcltc2226Device_S00_AXI is
     CONSTANT id : STD_LOGIC_VECTOR(15 DOWNTO 0) := STD_LOGIC_VECTOR(to_unsigned(c_fLink_analog_input_id, 16));
     CONSTANT subtype_id : STD_LOGIC_VECTOR( 7 DOWNTO 0) := STD_LOGIC_VECTOR(to_unsigned(4, 8));
     CONSTANT interface_version : STD_LOGIC_VECTOR (7 DOWNTO 0) := (OTHERS => '0');
+    
+	CONSTANT NR_OF_TICKS_PER_SAMPLE_CLK_EDGE : INTEGER := base_clk/sample_clk/2;
+	CONSTANT CYCLE_COUNTHER_WIDTH : INTEGER := integer(ceil(log2(real(sample_clk))))+1;
+	
+	TYPE t_states IS (tick,tock);
+
+	TYPE t_internal_register IS RECORD
+		state			: t_states;
+		clk_count 		: UNSIGNED(CYCLE_COUNTHER_WIDTH-1 DOWNTO 0);
+		sample_clk      : std_logic;  
+	END RECORD;
+	
+	SIGNAL ri, ri_next : t_internal_register;
+    
     
 	------------------------------------------------
 	---- Signals for user logic memory space example
@@ -460,8 +475,8 @@ begin
 	  end if;
 	end  process;
 
-	    --read
-    --read data
+	-- read
+    -- read data
     process( axi_rvalid,axi_araddr ) is
         VARIABLE reg_number: INTEGER RANGE 0 TO NUMBER_OF_CHANNELS := 0; 
     begin
@@ -495,7 +510,53 @@ begin
         end if;  
     end process;
             
-	-- User logic ends
-	
+	--------------------------------------------
+	-- create sample clock from base clock
+	--------------------------------------------
+	comb_process: PROCESS(ri, S_AXI_ACLK)
+		
+	VARIABLE vi: t_internal_register;
+		
+	BEGIN
+		-- keep variables stable
+		vi:=ri;
+			
+		CASE vi.state IS 
+			WHEN tick => 
+				vi.sample_clk := '0';	
+				IF vi.clk_count = to_unsigned(NR_OF_TICKS_PER_SAMPLE_CLK_EDGE,CYCLE_COUNTHER_WIDTH) THEN
+					vi.state := tock;
+					vi.clk_count := to_unsigned(0,CYCLE_COUNTHER_WIDTH);
+				ELSE
+				    vi.clk_count := vi.clk_count + 1;
+				END IF;
+			WHEN tock =>	
+				vi.sample_clk := '1';
+				IF vi.clk_count = to_unsigned(NR_OF_TICKS_PER_SAMPLE_CLK_EDGE,CYCLE_COUNTHER_WIDTH) THEN
+					vi.state := tick;
+					vi.clk_count := to_unsigned(0,CYCLE_COUNTHER_WIDTH);
+				ELSE
+				    vi.clk_count := vi.clk_count + 1;
+				END IF;
+			WHEN OTHERS =>
+				vi.state := tick; 
+		END CASE;
+			
+	END PROCESS comb_process;
+		
+	--------------------------------------------
+	-- registered process
+	--------------------------------------------
+	reg_process: PROCESS (S_AXI_ACLK)
+	BEGIN
+		IF rising_edge(S_AXI_ACLK) THEN
+			ri <= ri_next;
+		END IF;
+	END PROCESS reg_process;
+		
+	--output assignement 
+	osl_clk <= ri.sample_clk;
+    
+    -- User logic ends
 
 end arch_imp;
